@@ -13,7 +13,7 @@ build:
 	$(JCC) $(JFLAGS) -cp "$(CP)" *.java
 
 run:
-	$(JVM) -cp "$(CP)" $(MAIN) $(ARGS)
+    $(JVM) -cp ".:libs/*" $(MAIN) $(ARGS)
 
 clean:
 	$(RM) *.class

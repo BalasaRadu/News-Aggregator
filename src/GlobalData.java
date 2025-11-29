@@ -24,4 +24,7 @@ public class GlobalData {
     // Words task
     public static Set<String> linkingWords = new HashSet<>();
     public static ConcurrentHashMap<String, AtomicInteger> keywordCounts = new ConcurrentHashMap<>();
+
+    // Authors task
+    public static ConcurrentHashMap<String, ConcurrentLinkedQueue<String>> authorToUuids = new ConcurrentHashMap<>();
 }

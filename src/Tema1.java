@@ -154,6 +154,12 @@ public class Tema1 {
                 List<Article> chunk = finalList.subList(i, end);
                 readerTasks.add(new GenericReaderTask(chunk, GlobalData.validCategories, GlobalData.categoryToUuids, Article::getCategories));
                 readerTasks.add(new GenericReaderTask(chunk, GlobalData.validLanguages, GlobalData.languageToUuids, languageExtractor));
+                readerTasks.add(new GenericReaderTask(
+                        chunk,
+                        null,
+                        GlobalData.authorToUuids,
+                        article -> Collections.singletonList(article.getAuthor())
+                ));;
                 readerTasks.add(new KeywordProcessorTask(chunk));
             }
 
@@ -166,17 +172,26 @@ public class Tema1 {
                         entry.getValue(),
                         name -> name.replace(",", "").replaceAll("\\s+", "_") + ".txt"));
             }
+
             for (var entry : GlobalData.languageToUuids.entrySet()) {
                 writingTasks.add(new GenericWriterTask(
                         entry.getKey(),
                         entry.getValue(),
                         name -> name + ".txt"));
             }
+
             writingTasks.add(new KeywordWriterTask());
+
             invokeAll(tpe, writingTasks);
 
             // sorting by time
             createAllArticleFile(finalList);
+
+            List<Callable<Void>> reportTask = Collections.singletonList(
+                    new ReportWriterTask(finalList, GlobalData.rawArticles.size())
+            );
+            invokeAll(tpe, reportTask);
+
 
         } catch (Exception e) {
             e.printStackTrace();

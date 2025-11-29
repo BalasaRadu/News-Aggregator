@@ -28,8 +28,8 @@ public class GenericReaderTask implements Callable<Void> {
                 continue;
             }
             for (String val : field) {
-                if (validValues.contains(val)) {
-                    targetMap.computeIfAbsent(val, _ -> new ConcurrentLinkedQueue<>())
+                if (validValues == null || validValues.contains(val)) {
+                    targetMap.computeIfAbsent(val, k -> new ConcurrentLinkedQueue<>())
                             .add(article.getUuid());
                 }
             }
