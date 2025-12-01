@@ -1,4 +1,3 @@
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,26 +14,28 @@ public class KeywordProcessorTask implements Callable<Void> {
     @Override
     public Void call() {
         for (Article article : articlesChunk) {
-            if (!"english".equals(article.getLanguage())) {
-                continue;
+            if ("english".equals(article.getLanguage())) {
+                String text = article.getText();
+                if (text == null) continue;
+
+                Set<String> wordsInThisArticle = new HashSet<>();
+
+                String[] tokens = text.toLowerCase().split("[\\s]+");
+
+                for (String token : tokens) {
+                    String cleanWord = token.replaceAll("[^a-z]", "");
+
+                    if (!cleanWord.isEmpty() && !GlobalData.linkingWords.contains(cleanWord)) {
+                        wordsInThisArticle.add(cleanWord);
+                    }
+                }
+
+                for (String word : wordsInThisArticle) {
+                    GlobalData.keywordCounts
+                            .computeIfAbsent(word, k -> new AtomicInteger(0))
+                            .incrementAndGet();
+                }
             }
-            String text = article.getText();
-            if (text == null) {
-                continue;
-            }
-
-            Set<String> wordsInThisArticle = new HashSet<>();
-
-            Arrays.stream(text.toLowerCase().split(" "))
-                    .map(token -> token.replaceAll("[^a-z]", ""))
-                    .filter(word -> !word.isEmpty())
-                    .filter(word -> !GlobalData.linkingWords.contains(word))
-                    .forEach(wordsInThisArticle::add);
-
-            wordsInThisArticle.forEach(
-                    word -> GlobalData.keywordCounts
-                    .computeIfAbsent(word, k -> new AtomicInteger(0))
-                    .incrementAndGet());
         }
         return null;
     }

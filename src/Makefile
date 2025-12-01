@@ -1,10 +1,9 @@
+.PHONY: build run clean default
+
 JCC = javac
 JFLAGS = -g
-
 JVM = java
-
 MAIN = Tema1
-
 CP = .:libs/*
 
 default: build
@@ -12,8 +11,8 @@ default: build
 build:
 	$(JCC) $(JFLAGS) -cp "$(CP)" *.java
 
-run:
-    $(JVM) -cp ".:libs/*" $(MAIN) $(ARGS)
+run: build
+	$(JVM) -cp "$(CP)" $(MAIN) $(ARGS)
 
 clean:
 	$(RM) *.class

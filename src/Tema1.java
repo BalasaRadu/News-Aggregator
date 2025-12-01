@@ -28,21 +28,6 @@ public class Tema1 {
         return tasks;
     }
 
-    private static void createAllArticleFile(List<Article> finalList) {
-        Collections.sort(finalList);
-        try {
-            BufferedWriter bw = new BufferedWriter(new FileWriter("all_articles.txt"));
-            for (Article a : finalList) {
-                bw.write(a.getUuid() + " " + a.getPublished());
-                bw.newLine();
-            }
-            bw.close();
-        } catch (Exception e) {
-            System.out.println("Error in createAllArticleFile.");
-            e.printStackTrace();
-        }
-    }
-
     private static void loadAuxiliaryData(String auxInputPath) {
         try {
             BufferedReader br = new BufferedReader(new FileReader(auxInputPath));
@@ -91,18 +76,7 @@ public class Tema1 {
         }
     }
 
-    private static void invokeAll(ExecutorService tpe, List<Callable<Void>> tasks) {
-        try {
-            List<Future<Void>> results = tpe.invokeAll(tasks);
-            for (Future<Void> result : results) {
-                result.get();
-            }
-        } catch (ExecutionException | InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-
-    static void main(String[] args) {
+    public static void main(String[] args) {
         if (args.length < 3) {
             System.err.println("Usage: java Tema1 <numar_threads> <fisier_articole> <fisier_suplimentar>");
             return;
@@ -119,51 +93,43 @@ public class Tema1 {
         try {
             // reading articles
             List<Callable<Void>> processJsonTasks = getJsonParserTasks(articlesInputPath);
-            invokeAll(tpe, processJsonTasks);
-
-            System.out.println("Finished reading. Raw articles: " + GlobalData.rawArticles.size());
+            tpe.invokeAll(processJsonTasks);
 
             // removing duplicates
-            List<Article> finalList = new ArrayList<>();
-            for (Article a : GlobalData.rawArticles) {
-                if (GlobalData.uuidCounts.get(a.getUuid()) == 1 &&
-                        GlobalData.titleCounts.get(a.getTitle()) == 1) {
-                    finalList.add(a);
-                }
+            List<Article> rawList = new ArrayList<>(GlobalData.rawArticles);
+
+            List<Callable<List<Article>>> filterTasks = new ArrayList<>();
+            int totalRaw = rawList.size();
+            int filterChunkSize = Math.max(1, totalRaw / numThreads);
+
+            for (int i = 0; i < totalRaw; i += filterChunkSize) {
+                int end = Math.min(i + filterChunkSize, totalRaw);
+                filterTasks.add(new FilterTask(rawList.subList(i, end)));
             }
 
-            // sorting by categories and languages
-            List<Callable<Void>> readerTasks = new ArrayList<>();
+            List<Future<List<Article>>> filterResults = tpe.invokeAll(filterTasks);
 
-            Function<Article, List<String>> languageExtractor = article -> {
-                String lang = article.getLanguage();
-                if (lang == null) {
-                    return Collections.emptyList();
-                }
-                return Collections.singletonList(lang);
-            };
+            List<Article> finalList = new ArrayList<>();
+            for (Future<List<Article>> res : filterResults) {
+                finalList.addAll(res.get());
+            }
+
+            // processing the articles
+            List<Callable<Void>> processingTasks = new ArrayList<>();
 
             int totalArticles = finalList.size();
-            int chunkSize = totalArticles / numThreads;
-            if (chunkSize == 0) {
-                chunkSize = 1;
-            }
+            int chunkSize = Math.max(1, finalList.size() / numThreads);
 
             for (int i = 0; i < totalArticles; i += chunkSize) {
                 int end = Math.min(i + chunkSize, totalArticles);
                 List<Article> chunk = finalList.subList(i, end);
-                readerTasks.add(new GenericReaderTask(chunk, GlobalData.validCategories, GlobalData.categoryToUuids, Article::getCategories));
-                readerTasks.add(new GenericReaderTask(chunk, GlobalData.validLanguages, GlobalData.languageToUuids, languageExtractor));
-                readerTasks.add(new GenericReaderTask(
-                        chunk,
-                        null,
-                        GlobalData.authorToUuids,
-                        article -> Collections.singletonList(article.getAuthor())
-                ));;
-                readerTasks.add(new KeywordProcessorTask(chunk));
+                processingTasks.add(new ArticleProcessingTask(chunk));
             }
 
-            invokeAll(tpe, readerTasks);
+            tpe.invokeAll(processingTasks);
+
+            // sorting by time
+            Collections.sort(finalList);
 
             List<Callable<Void>> writingTasks = new ArrayList<>();
             for (var entry : GlobalData.categoryToUuids.entrySet()) {
@@ -180,30 +146,17 @@ public class Tema1 {
                         name -> name + ".txt"));
             }
 
+
+            writingTasks.add(new AllArticlesWriterTask(finalList));
             writingTasks.add(new KeywordWriterTask());
+            writingTasks.add(new ReportWriterTask(finalList, GlobalData.rawArticles.size()));
 
-            invokeAll(tpe, writingTasks);
-
-            // sorting by time
-            createAllArticleFile(finalList);
-
-            List<Callable<Void>> reportTask = Collections.singletonList(
-                    new ReportWriterTask(finalList, GlobalData.rawArticles.size())
-            );
-            invokeAll(tpe, reportTask);
-
+            tpe.invokeAll(writingTasks);
 
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
             tpe.shutdown();
-            try {
-                if (!tpe.awaitTermination(1, TimeUnit.SECONDS)) {
-                    tpe.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                tpe.shutdownNow();
-            }
         }
     }
 }
